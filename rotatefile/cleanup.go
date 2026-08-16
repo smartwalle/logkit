@@ -1,4 +1,4 @@
-package rotate
+package rotatefile
 
 import (
 	"compress/gzip"

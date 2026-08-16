@@ -1,5 +1,5 @@
-// Package rotate 提供并发安全的日志文件轮转 Writer。
-package rotate
+// Package rotatefile 提供并发安全的日志文件轮转 Writer。
+package rotatefile
 
 import (
 	"errors"
@@ -8,10 +8,9 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-)
 
-// ErrClosed 表示 Writer 已关闭，不能再执行写入操作。
-var ErrClosed = errors.New("writer is closed")
+	"github.com/smartwalle/logkit"
+)
 
 // Writer 是一个向文件追加日志并按大小或时间自动轮转的 io.Writer。
 //
@@ -38,8 +37,8 @@ type Writer struct {
 	closeErr       error
 }
 
-// NewWriter 创建 filename 的父目录（如有必要）并以追加模式打开日志文件。
-func NewWriter(filename string, opts ...Option) (*Writer, error) {
+// New 创建 filename 的父目录（如有必要）并以追加模式打开日志文件。
+func New(filename string, opts ...Option) (*Writer, error) {
 	if !validFilename(filename) {
 		return nil, fmt.Errorf("filename must not be empty")
 	}
@@ -74,7 +73,7 @@ func (w *Writer) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
-		return 0, ErrClosed
+		return 0, logkit.ErrWriterClosed
 	}
 	if err := w.ensureFileLocked(); err != nil {
 		w.recordRuntimeErrorLocked(err)
