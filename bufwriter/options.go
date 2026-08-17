@@ -1,4 +1,4 @@
-package bufferedwriter
+package bufwriter
 
 import (
 	"fmt"

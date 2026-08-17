@@ -2,12 +2,13 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/smartwalle/logkit/bufferedwriter"
+	"github.com/smartwalle/logkit/bufwriter"
 	"github.com/smartwalle/logkit/rotatefile"
 )
 
@@ -26,10 +27,10 @@ func main() {
 		slog.Error("create log writer", "error", err)
 		os.Exit(1)
 	}
-	writer, err := bufferedwriter.New(
+	writer, err := bufwriter.New(
 		fileWriter,
-		bufferedwriter.WithBufferSize(512), // 使用较小缓冲区，便于演示缓冲与轮转的组合。
-		bufferedwriter.WithFlushInterval(time.Second),
+		bufwriter.WithBufferSize(512), // 使用较小缓冲区，便于演示缓冲与轮转的组合。
+		bufwriter.WithFlushInterval(time.Second),
 	)
 	if err != nil {
 		if closeErr := fileWriter.Close(); closeErr != nil {
@@ -48,10 +49,13 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
-	for i := 0; i < 10000; i++ {
-		logger.Info("application started", "version", "v1.0.0")
-		logger.Info("request completed", "request_id", "req-123", "duration", 42*time.Millisecond)
-		logger.Warn("cache miss", "key", "profile:42")
-		time.Sleep(time.Millisecond * 100)
+	for i := 1; i <= 100; i++ {
+		logger.Info("HTTP request completed",
+			"request_id", fmt.Sprintf("req-%04d", i),
+			"method", "GET",
+			"path", "/api/v1/orders",
+			"status", 200,
+			"duration", 42*time.Millisecond,
+		)
 	}
 }

@@ -1,7 +1,8 @@
-// Package bufferedwriter 提供带大小和定时刷新的并发安全 io.Writer。
-package bufferedwriter
+// Package bufwriter 提供带大小和定时刷新的并发安全 io.Writer。
+package bufwriter
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -19,7 +20,7 @@ type Writer struct {
 	mu sync.Mutex
 
 	writer  io.Writer
-	buffer  []byte
+	buffer  bytes.Buffer
 	options options
 
 	workerStop chan struct{}
@@ -41,11 +42,11 @@ func New(writer io.Writer, opts ...Option) (*Writer, error) {
 	}
 	w := &Writer{
 		writer:     writer,
-		buffer:     make([]byte, 0, nOpts.bufferSize),
 		options:    nOpts,
 		workerDone: make(chan struct{}),
 		closeDone:  make(chan struct{}),
 	}
+	w.buffer.Grow(nOpts.bufferSize)
 	if w.options.flushInterval > 0 {
 		w.workerStop = make(chan struct{})
 		go w.runFlushWorker()
@@ -76,13 +77,13 @@ func (w *Writer) Write(p []byte) (int, error) {
 		}
 		return w.writeLocked(p)
 	}
-	if len(w.buffer)+len(p) > w.options.bufferSize {
+	if w.buffer.Len()+len(p) > w.options.bufferSize {
 		if err := w.flushLocked(); err != nil {
 			return 0, err
 		}
 	}
-	w.buffer = append(w.buffer, p...)
-	if len(w.buffer) == w.options.bufferSize {
+	w.buffer.Write(p)
+	if w.buffer.Len() == w.options.bufferSize {
 		if err := w.flushLocked(); err != nil {
 			return len(p), err
 		}
@@ -144,13 +145,12 @@ func (w *Writer) runFlushWorker() {
 }
 
 func (w *Writer) flushLocked() error {
-	if len(w.buffer) == 0 {
+	if w.buffer.Len() == 0 {
 		return nil
 	}
-	n, err := w.writeLocked(w.buffer)
+	n, err := w.writeLocked(w.buffer.Bytes())
 	if n > 0 {
-		copy(w.buffer, w.buffer[n:])
-		w.buffer = w.buffer[:len(w.buffer)-n]
+		w.buffer.Next(n)
 	}
 	return err
 }
