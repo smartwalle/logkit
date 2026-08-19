@@ -23,10 +23,7 @@ func (h *EnrichHandler) Enabled(ctx context.Context, level slog.Level) bool {
 
 // Handle 从 Context 提取属性并附加到记录后交给下游 EnrichHandler。
 func (h *EnrichHandler) Handle(ctx context.Context, record slog.Record) error {
-	if !h.next.Enabled(ctx, record.Level) {
-		return nil
-	}
-	attrs := h.extract(ctx)
+	var attrs = h.extract(ctx)
 	if len(attrs) == 0 {
 		return h.next.Handle(ctx, record)
 	}

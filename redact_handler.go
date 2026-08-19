@@ -32,9 +32,6 @@ func (h *RedactHandler) Enabled(ctx context.Context, level slog.Level) bool {
 
 // Handle 对记录中的字符串内容执行脱敏后交给下游 RedactHandler。
 func (h *RedactHandler) Handle(ctx context.Context, record slog.Record) error {
-	if !h.next.Enabled(ctx, record.Level) {
-		return nil
-	}
 	return h.next.Handle(ctx, h.redactRecord(record))
 }
 
@@ -113,8 +110,6 @@ func (h *RedactHandler) redactValue(value slog.Value) (slog.Value, bool) {
 		return slog.GroupValue(redacted...), true
 	case slog.KindAny:
 		switch anyValue := value.Any().(type) {
-		case error:
-			return h.redactStringValue(value, anyValue.Error())
 		case fmt.Stringer:
 			return h.redactStringValue(value, anyValue.String())
 		default:
@@ -125,7 +120,7 @@ func (h *RedactHandler) redactValue(value slog.Value) (slog.Value, bool) {
 }
 
 func (h *RedactHandler) redactStringValue(value slog.Value, text string) (slog.Value, bool) {
-	redacted := h.redactString(text)
+	var redacted = h.redactString(text)
 	if redacted == text {
 		return value, false
 	}
