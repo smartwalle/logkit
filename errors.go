@@ -4,4 +4,4 @@ package logkit
 import "errors"
 
 // ErrWriterClosed 表示 Writer 已关闭，不能再执行写入操作。
-var ErrWriterClosed = errors.New("writer is closed")
+var ErrWriterClosed = errors.New("writer already closed")
