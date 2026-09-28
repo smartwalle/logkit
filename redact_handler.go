@@ -113,6 +113,7 @@ func (h *RedactHandler) redactValue(value slog.Value) (slog.Value, bool) {
 		case fmt.Stringer:
 			return h.redactStringValue(value, anyValue.String())
 		default:
+			return slog.StringValue("<redacted>"), true
 		}
 	default:
 	}
