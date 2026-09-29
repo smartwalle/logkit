@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	fileWriter, err := rotatefile.New(
+	file, err := rotatefile.New(
 		filepath.Join("logs", "app.log"),
 		rotatefile.WithMaxSize(1<<10), // 单个当前文件最大 1 KiB，便于演示轮转。
 		rotatefile.WithMaxBackups(5),
@@ -22,28 +22,22 @@ func main() {
 		rotatefile.WithRotateInterval(24*time.Hour),
 		rotatefile.WithCompression(false),
 	)
-
 	if err != nil {
 		slog.Error("create log writer", "error", err)
 		os.Exit(1)
 	}
+	defer file.Close()
+
 	writer, err := bufwriter.New(
-		fileWriter,
+		file,
 		bufwriter.WithBufferSize(512), // 使用较小缓冲区，便于演示缓冲与轮转的组合。
 		bufwriter.WithFlushInterval(time.Second),
 	)
 	if err != nil {
-		if closeErr := fileWriter.Close(); closeErr != nil {
-			slog.Error("close log writer", "error", closeErr)
-		}
 		slog.Error("create buffered writer", "error", err)
 		os.Exit(1)
 	}
-	defer func() {
-		if err := writer.Close(); err != nil {
-			slog.Error("close log writer", "error", err)
-		}
-	}()
+	defer writer.Close()
 
 	logger := slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
