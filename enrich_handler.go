@@ -5,7 +5,7 @@ import (
 	"log/slog"
 )
 
-// EnrichHandler 在将记录交给下游 EnrichHandler 前附加从 Context 提取的属性。
+// EnrichHandler 在将记录交给下游 Handler 前附加从 Context 提取的属性。
 type EnrichHandler struct {
 	next    slog.Handler
 	extract func(context.Context) []slog.Attr

@@ -11,7 +11,7 @@ type Redactor interface {
 	Redact(string) string
 }
 
-// RedactHandler 在将记录交给下游 RedactHandler 前对字符串内容执行脱敏。
+// RedactHandler 在将记录交给下游 Handler 前对字符串内容执行脱敏。
 type RedactHandler struct {
 	next     slog.Handler
 	redactor Redactor
