@@ -48,8 +48,11 @@ func New(filename string, opts ...Option) (*Writer, error) {
 		return nil, err
 	}
 	w := &Writer{
-		filename: filename, options: nOpts,
-		maintenance: make(chan struct{}, 1), workerDone: make(chan struct{}), closeDone: make(chan struct{}),
+		filename:    filename,
+		options:     nOpts,
+		maintenance: make(chan struct{}, 1),
+		workerDone:  make(chan struct{}),
+		closeDone:   make(chan struct{}),
 	}
 	if err = w.openLocked(); err != nil {
 		return nil, err
