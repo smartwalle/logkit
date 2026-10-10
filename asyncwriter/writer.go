@@ -1,4 +1,4 @@
-package logkit
+package asyncwriter
 
 import (
 	"errors"
@@ -8,7 +8,7 @@ import (
 	"github.com/smartwalle/logkit/internal/blockingqueue"
 )
 
-type AsyncWriter struct {
+type Writer struct {
 	writer io.WriteCloser
 	queue  *blockingqueue.Queue[[]byte]
 
@@ -18,9 +18,9 @@ type AsyncWriter struct {
 	err atomic.Pointer[error]
 }
 
-// NewAsyncWriter 创建异步 Writer。
-func NewAsyncWriter(w io.WriteCloser, capacity int) *AsyncWriter {
-	var aw = &AsyncWriter{
+// New 创建异步 Writer。
+func New(w io.WriteCloser, capacity int) *Writer {
+	var aw = &Writer{
 		writer: w,
 		queue:  blockingqueue.New[[]byte](capacity),
 		done:   make(chan struct{}),
@@ -31,7 +31,7 @@ func NewAsyncWriter(w io.WriteCloser, capacity int) *AsyncWriter {
 
 // Write 将数据复制后加入队列。
 // 队列满时阻塞等待；成功返回表示数据已入队，不代表底层写入完成。
-func (w *AsyncWriter) Write(p []byte) (int, error) {
+func (w *Writer) Write(p []byte) (int, error) {
 	if w.closed.Load() {
 		return 0, io.ErrClosedPipe
 	}
@@ -55,7 +55,7 @@ func (w *AsyncWriter) Write(p []byte) (int, error) {
 
 // Close 关闭队列，等待已入队的数据处理完成，并关闭底层 Writer。
 // 并发或重复调用均等待后台处理结束。
-func (w *AsyncWriter) Close() error {
+func (w *Writer) Close() error {
 	if w.closed.CompareAndSwap(false, true) {
 		w.queue.Close()
 	}
@@ -68,7 +68,7 @@ func (w *AsyncWriter) Close() error {
 }
 
 // run 按顺序将队列中的数据写入底层 Writer。
-func (w *AsyncWriter) run() {
+func (w *Writer) run() {
 	defer func() {
 		if err := w.writer.Close(); err != nil {
 			w.err.CompareAndSwap(nil, &err)

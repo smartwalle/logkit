@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/smartwalle/logkit"
+	"github.com/smartwalle/logkit/asyncwriter"
 	"github.com/smartwalle/logkit/rotatefile"
 )
 
@@ -39,7 +40,7 @@ func main() {
 	}
 	defer buffer.Close()
 
-	writer := logkit.NewAsyncWriter(buffer, 10)
+	writer := asyncwriter.New(buffer, 10)
 	defer writer.Close()
 
 	logger := slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
