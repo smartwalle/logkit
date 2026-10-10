@@ -1,4 +1,4 @@
-// Command basic 演示如何将 rotatefile.Writer 与 log/slog 集成使用。
+// Command basic 演示如何将 rotatefile.File 与 log/slog 集成使用。
 package main
 
 import (

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Option 用于配置 Writer。
+// Option 用于配置 File。
 type Option func(*options)
 
 type options struct {

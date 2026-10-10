@@ -1,4 +1,4 @@
-// Package rotatefile 提供并发安全的日志文件轮转 Writer。
+// Package rotatefile 提供并发安全的日志文件轮转 File。
 package rotatefile
 
 import (
@@ -11,11 +11,11 @@ import (
 	"time"
 )
 
-// Writer 是一个向文件追加日志并按大小或时间自动轮转的 io.Writer。
+// File 是一个向文件追加日志并按大小或时间自动轮转的 io.Writer。
 //
-// Writer 可被多个 goroutine 并发调用；它独占管理指定的日志路径，不与外部
+// File 可被多个 goroutine 并发调用；它独占管理指定的日志路径，不与外部
 // logrotate 混用。
-type Writer struct {
+type File struct {
 	mu sync.Mutex
 
 	filename string
@@ -37,7 +37,7 @@ type Writer struct {
 }
 
 // New 创建 filename 的父目录（如有必要）并以追加模式打开日志文件。
-func New(filename string, opts ...Option) (*Writer, error) {
+func New(filename string, opts ...Option) (*File, error) {
 	if !validFilename(filename) {
 		return nil, fmt.Errorf("filename must not be empty")
 	}
@@ -46,7 +46,7 @@ func New(filename string, opts ...Option) (*Writer, error) {
 	if err != nil {
 		return nil, err
 	}
-	w := &Writer{
+	w := &File{
 		filename:    filename,
 		options:     nOpts,
 		maintenance: make(chan struct{}, 1),
@@ -71,46 +71,46 @@ func New(filename string, opts ...Option) (*Writer, error) {
 //
 // 写入前会根据大小和时间策略自动轮转。首个写入或轮转错误会被记录，并由 Close
 // 返回；轮转失败但当前文件仍可写时，Write 会完成当前写入并返回轮转错误。
-func (w *Writer) Write(p []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.closed {
+func (f *File) Write(p []byte) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.closed {
 		return 0, io.ErrClosedPipe
 	}
-	if err := w.ensureFileLocked(); err != nil {
-		w.recordRuntimeErrorLocked(err)
+	if err := f.ensureFileLocked(); err != nil {
+		f.recordRuntimeErrorLocked(err)
 		return 0, err
 	}
 	if len(p) == 0 {
 		return 0, nil
 	}
 	var rotationErr error
-	if w.shouldRotateLocked(int64(len(p))) {
-		if err := w.rotateLocked(); err != nil {
+	if f.shouldRotateLocked(int64(len(p))) {
+		if err := f.rotateLocked(); err != nil {
 			// 轮转失败时，优先继续使用已恢复打开的当前日志文件。
-			if w.file == nil {
-				w.recordRuntimeErrorLocked(err)
+			if f.file == nil {
+				f.recordRuntimeErrorLocked(err)
 				return 0, err
 			}
 			rotationErr = err
 		}
 	}
-	n, err := w.file.Write(p)
-	w.size += int64(n)
+	n, err := f.file.Write(p)
+	f.size += int64(n)
 	if err != nil {
 		writeErr := fmt.Errorf("write log file: %w", err)
 		result := errors.Join(rotationErr, writeErr)
-		w.recordRuntimeErrorLocked(result)
+		f.recordRuntimeErrorLocked(result)
 		return n, result
 	}
 	if n != len(p) {
 		writeErr := errors.New("write log file: short write")
 		result := errors.Join(rotationErr, writeErr)
-		w.recordRuntimeErrorLocked(result)
+		f.recordRuntimeErrorLocked(result)
 		return n, result
 	}
 	if rotationErr != nil {
-		w.recordRuntimeErrorLocked(rotationErr)
+		f.recordRuntimeErrorLocked(rotationErr)
 		return n, rotationErr
 	}
 	return n, nil
@@ -118,113 +118,113 @@ func (w *Writer) Write(p []byte) (int, error) {
 
 // Close 停止维护任务、等待已排队的压缩和清理完成，并关闭日志文件。
 // Close 可重复调用；每次调用均返回相同的最终错误。
-func (w *Writer) Close() error {
-	w.mu.Lock()
-	if w.closed {
-		done := w.closeDone
-		w.mu.Unlock()
+func (f *File) Close() error {
+	f.mu.Lock()
+	if f.closed {
+		done := f.closeDone
+		f.mu.Unlock()
 		<-done
-		w.mu.Lock()
-		err := w.closeErr
-		w.mu.Unlock()
+		f.mu.Lock()
+		err := f.closeErr
+		f.mu.Unlock()
 		return err
 	}
-	w.closed = true
-	close(w.maintenance)
-	w.mu.Unlock()
-	<-w.workerDone
+	f.closed = true
+	close(f.maintenance)
+	f.mu.Unlock()
+	<-f.workerDone
 
-	w.mu.Lock()
+	f.mu.Lock()
 	var closeErr error
-	if w.file != nil {
-		closeErr = w.file.Close()
-		w.file = nil
+	if f.file != nil {
+		closeErr = f.file.Close()
+		f.file = nil
 	}
 	if closeErr != nil {
 		closeErr = fmt.Errorf("close log file: %w", closeErr)
 	}
-	w.closeErr = errors.Join(w.runtimeErr, w.maintenanceErr, closeErr)
-	result := w.closeErr
-	close(w.closeDone)
-	w.mu.Unlock()
+	f.closeErr = errors.Join(f.runtimeErr, f.maintenanceErr, closeErr)
+	result := f.closeErr
+	close(f.closeDone)
+	f.mu.Unlock()
 	return result
 }
 
-func (w *Writer) recordRuntimeErrorLocked(err error) {
-	if err != nil && w.runtimeErr == nil {
-		w.runtimeErr = err
+func (f *File) recordRuntimeErrorLocked(err error) {
+	if err != nil && f.runtimeErr == nil {
+		f.runtimeErr = err
 	}
 }
 
-func (w *Writer) ensureFileLocked() error {
-	if w.file != nil {
+func (f *File) ensureFileLocked() error {
+	if f.file != nil {
 		return nil
 	}
-	return w.openLocked()
+	return f.openLocked()
 }
 
-func (w *Writer) openLocked() error {
-	if err := os.MkdirAll(filepath.Dir(w.filename), 0o755); err != nil {
+func (f *File) openLocked() error {
+	if err := os.MkdirAll(filepath.Dir(f.filename), 0o755); err != nil {
 		return fmt.Errorf("create log directory: %w", err)
 	}
-	f, err := os.OpenFile(w.filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, w.options.FileMode)
+	file, err := os.OpenFile(f.filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, f.options.FileMode)
 	if err != nil {
 		return fmt.Errorf("open log file: %w", err)
 	}
-	info, err := f.Stat()
+	info, err := file.Stat()
 	if err != nil {
 		_ = f.Close()
 		return fmt.Errorf("stat log file: %w", err)
 	}
 	now := time.Now()
-	w.file, w.size = f, info.Size()
-	if w.options.RotateInterval > 0 {
-		w.nextRotate = now.Add(w.options.RotateInterval)
+	f.file, f.size = file, info.Size()
+	if f.options.RotateInterval > 0 {
+		f.nextRotate = now.Add(f.options.RotateInterval)
 	} else {
-		w.nextRotate = time.Time{}
+		f.nextRotate = time.Time{}
 	}
 	return nil
 }
 
-func (w *Writer) shouldRotateLocked(incoming int64) bool {
-	timeDue := !w.nextRotate.IsZero() && !time.Now().Before(w.nextRotate)
-	sizeDue := w.options.MaxSize > 0 && w.size > 0 && w.size+incoming > w.options.MaxSize
+func (f *File) shouldRotateLocked(incoming int64) bool {
+	timeDue := !f.nextRotate.IsZero() && !time.Now().Before(f.nextRotate)
+	sizeDue := f.options.MaxSize > 0 && f.size > 0 && f.size+incoming > f.options.MaxSize
 	return timeDue || sizeDue
 }
 
-func (w *Writer) rotateLocked() error {
-	file := w.file
-	w.file = nil
+func (f *File) rotateLocked() error {
+	file := f.file
+	f.file = nil
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("close log file for rotation: %w", err)
 	}
 	now := time.Now()
-	history, err := w.nextHistoricalFilenameLocked(now)
+	history, err := f.nextHistoricalFilenameLocked(now)
 	if err != nil {
-		_ = w.openLocked()
+		_ = f.openLocked()
 		return err
 	}
-	if err = os.Rename(w.filename, history); err != nil {
-		openErr := w.openLocked()
+	if err = os.Rename(f.filename, history); err != nil {
+		openErr := f.openLocked()
 		if openErr != nil {
 			return fmt.Errorf("rotate log file: %w (also reopen current file: %v)", err, openErr)
 		}
 		return fmt.Errorf("rotate log file: %w", err)
 	}
-	if err = w.openLocked(); err != nil {
+	if err = f.openLocked(); err != nil {
 		return fmt.Errorf("open new log file after rotation: %w", err)
 	}
-	w.rotatedAt = now
-	w.enqueueMaintenance()
+	f.rotatedAt = now
+	f.enqueueMaintenance()
 	return nil
 }
 
-func (w *Writer) nextHistoricalFilenameLocked(now time.Time) (string, error) {
-	if !w.rotatedAt.IsZero() && now.Format(timestampLayout) != w.rotatedAt.Format(timestampLayout) {
-		w.sequence = 0
+func (f *File) nextHistoricalFilenameLocked(now time.Time) (string, error) {
+	if !f.rotatedAt.IsZero() && now.Format(timestampLayout) != f.rotatedAt.Format(timestampLayout) {
+		f.sequence = 0
 	}
 	for {
-		candidate := historicalFilename(w.filename, now, w.sequence)
+		candidate := historicalFilename(f.filename, now, f.sequence)
 		_, rawErr := os.Lstat(candidate)
 		_, gzipErr := os.Lstat(candidate + ".gz")
 		if os.IsNotExist(rawErr) && os.IsNotExist(gzipErr) {
@@ -236,58 +236,58 @@ func (w *Writer) nextHistoricalFilenameLocked(now time.Time) (string, error) {
 		if gzipErr != nil && !os.IsNotExist(gzipErr) {
 			return "", fmt.Errorf("check compressed historical log name: %w", gzipErr)
 		}
-		w.sequence++
+		f.sequence++
 	}
 }
 
-func (w *Writer) needsMaintenance() bool {
-	return w.options.MaxBackups > 0 || w.options.MaxAge > 0 ||
-		w.options.MaxTotalSize > 0 || w.options.Compress
+func (f *File) needsMaintenance() bool {
+	return f.options.MaxBackups > 0 || f.options.MaxAge > 0 ||
+		f.options.MaxTotalSize > 0 || f.options.Compress
 }
 
-func (w *Writer) enqueueMaintenance() {
+func (f *File) enqueueMaintenance() {
 	select {
-	case w.maintenance <- struct{}{}:
+	case f.maintenance <- struct{}{}:
 	default:
 	}
 }
 
-func (w *Writer) runMaintenance() {
-	defer close(w.workerDone)
-	for range w.maintenance {
-		if err := w.maintainSafely(); err != nil {
-			w.mu.Lock()
-			if w.maintenanceErr == nil {
-				w.maintenanceErr = err
+func (f *File) runMaintenance() {
+	defer close(f.workerDone)
+	for range f.maintenance {
+		if err := f.maintainSafely(); err != nil {
+			f.mu.Lock()
+			if f.maintenanceErr == nil {
+				f.maintenanceErr = err
 			}
-			w.mu.Unlock()
+			f.mu.Unlock()
 		}
 	}
 }
 
-func (w *Writer) maintainSafely() (err error) {
+func (f *File) maintainSafely() (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = fmt.Errorf("maintenance worker panic: %v", recovered)
 		}
 	}()
-	return w.maintain()
+	return f.maintain()
 }
 
-func (w *Writer) maintain() error {
-	files, err := scanFiles(w.filename)
+func (f *File) maintain() error {
+	files, err := scanFiles(f.filename)
 	if err != nil {
 		return err
 	}
 	now := time.Now()
-	if w.options.MaxAge > 0 {
+	if f.options.MaxAge > 0 {
 		kept := files[:0]
 		for _, file := range files {
 			when := file.timestamp
 			if when.IsZero() {
 				when = file.modTime
 			}
-			if now.Sub(when) > w.options.MaxAge {
+			if now.Sub(when) > f.options.MaxAge {
 				if err = os.Remove(file.path); err != nil && !os.IsNotExist(err) {
 					return fmt.Errorf("remove expired log: %w", err)
 				}
@@ -297,31 +297,31 @@ func (w *Writer) maintain() error {
 		}
 		files = kept
 	}
-	if w.options.MaxBackups > 0 && len(files) > w.options.MaxBackups {
-		for _, file := range files[:len(files)-w.options.MaxBackups] {
+	if f.options.MaxBackups > 0 && len(files) > f.options.MaxBackups {
+		for _, file := range files[:len(files)-f.options.MaxBackups] {
 			if err = os.Remove(file.path); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("remove excess backup: %w", err)
 			}
 		}
-		files = files[len(files)-w.options.MaxBackups:]
+		files = files[len(files)-f.options.MaxBackups:]
 	}
 	var compressionErr error
-	if w.options.Compress {
+	if f.options.Compress {
 		for _, file := range files {
 			if !file.compressed {
-				if err = compressFile(file.path, w.options.FileMode); err != nil && compressionErr == nil {
+				if err = compressFile(file.path, f.options.FileMode); err != nil && compressionErr == nil {
 					compressionErr = err
 				}
 			}
 		}
-		files, err = scanFiles(w.filename)
+		files, err = scanFiles(f.filename)
 		if err != nil {
 			return errors.Join(compressionErr, err)
 		}
 	}
-	if w.options.MaxTotalSize > 0 {
+	if f.options.MaxTotalSize > 0 {
 		currentSize := int64(0)
-		if info, err := os.Stat(w.filename); err == nil {
+		if info, err := os.Stat(f.filename); err == nil {
 			currentSize = info.Size()
 		} else if !os.IsNotExist(err) {
 			return errors.Join(compressionErr, fmt.Errorf("stat current log for cleanup: %w", err))
@@ -331,7 +331,7 @@ func (w *Writer) maintain() error {
 			total += file.size
 		}
 		for _, file := range files {
-			if total <= w.options.MaxTotalSize {
+			if total <= f.options.MaxTotalSize {
 				break
 			}
 			if err = os.Remove(file.path); err != nil && !os.IsNotExist(err) {

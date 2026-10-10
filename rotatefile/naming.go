@@ -22,7 +22,7 @@ func leftPadSequence(sequence uint64) string {
 	return fmt.Sprintf("%04d", sequence)
 }
 
-// parseHistoricalName 仅识别当前 Writer 生成的历史文件，避免将具有相同前缀的
+// parseHistoricalName 仅识别当前 File 生成的历史文件，避免将具有相同前缀的
 // 无关文件纳入清理范围。
 func parseHistoricalName(current, path string) (timestamp time.Time, sequence uint64, compressed bool, ok bool) {
 	if filepath.Dir(current) != filepath.Dir(path) {
