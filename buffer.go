@@ -32,13 +32,13 @@ type Buffer struct {
 }
 
 // NewBuffer 创建一个包装 writer 的 Buffer。
-func NewBuffer(writer io.Writer, bufferSize int, flushInterval time.Duration) (*Buffer, error) {
+func NewBuffer(w io.Writer, bufferSize int, flushInterval time.Duration) (*Buffer, error) {
 	if bufferSize <= 0 {
 		bufferSize = defaultBufferSize
 	}
 
 	var b = &Buffer{
-		writer:        writer,
+		writer:        w,
 		bufferSize:    bufferSize,
 		flushInterval: flushInterval,
 		workerDone:    make(chan struct{}),
