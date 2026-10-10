@@ -9,7 +9,7 @@ import (
 )
 
 type Writer struct {
-	writer io.WriteCloser
+	writer io.Writer
 	queue  *blockingqueue.Queue[[]byte]
 
 	closed atomic.Bool
@@ -19,7 +19,7 @@ type Writer struct {
 }
 
 // New 创建异步 Writer。
-func New(w io.WriteCloser, capacity int) *Writer {
+func New(w io.Writer, capacity int) *Writer {
 	var aw = &Writer{
 		writer: w,
 		queue:  blockingqueue.New[[]byte](capacity),
@@ -70,9 +70,6 @@ func (w *Writer) Close() error {
 // run 按顺序将队列中的数据写入底层 Writer。
 func (w *Writer) run() {
 	defer func() {
-		if err := w.writer.Close(); err != nil {
-			w.err.CompareAndSwap(nil, &err)
-		}
 		close(w.done)
 	}()
 

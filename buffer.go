@@ -19,7 +19,7 @@ const (
 type Buffer struct {
 	mu sync.Mutex
 
-	writer io.WriteCloser
+	writer io.Writer
 	buffer bytes.Buffer
 
 	bufferSize    int
@@ -32,7 +32,7 @@ type Buffer struct {
 }
 
 // NewBuffer 创建一个包装 writer 的 Buffer。
-func NewBuffer(writer io.WriteCloser, bufferSize int, flushInterval time.Duration) (*Buffer, error) {
+func NewBuffer(writer io.Writer, bufferSize int, flushInterval time.Duration) (*Buffer, error) {
 	if bufferSize <= 0 {
 		bufferSize = defaultBufferSize
 	}
@@ -117,14 +117,14 @@ func (b *Buffer) Close() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if b.err == nil {
-		_ = b.flushLocked()
+	if b.err != nil {
+		return b.err
 	}
 
-	if err := b.writer.Close(); err != nil {
+	if err := b.flushLocked(); err != nil {
 		return err
 	}
-	return b.err
+	return nil
 }
 
 func (b *Buffer) runFlushWorker() {
