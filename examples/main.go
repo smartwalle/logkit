@@ -39,7 +39,10 @@ func main() {
 	}
 	defer buffer.Close()
 
-	logger := slog.New(slog.NewJSONHandler(buffer, &slog.HandlerOptions{
+	writer := logkit.NewAsyncWriter(buffer, 10)
+	defer writer.Close()
+
+	logger := slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 
