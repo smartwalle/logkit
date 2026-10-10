@@ -4,12 +4,11 @@ package rotatefile
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
-
-	"github.com/smartwalle/logkit"
 )
 
 // Writer 是一个向文件追加日志并按大小或时间自动轮转的 io.Writer。
@@ -76,7 +75,7 @@ func (w *Writer) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
-		return 0, logkit.ErrWriterClosed
+		return 0, io.ErrClosedPipe
 	}
 	if err := w.ensureFileLocked(); err != nil {
 		w.recordRuntimeErrorLocked(err)
