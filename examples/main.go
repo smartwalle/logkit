@@ -21,7 +21,6 @@ func main() {
 		rotatefile.WithMaxAge(7*24*time.Hour),
 		rotatefile.WithMaxTotalSize(1024*100),
 		rotatefile.WithRotateInterval(24*time.Hour),
-		rotatefile.WithCompression(false),
 	)
 	if err != nil {
 		slog.Error("create log writer", "error", err)

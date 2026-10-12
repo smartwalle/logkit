@@ -16,7 +16,6 @@ type options struct {
 	MaxAge         time.Duration
 	MaxTotalSize   int64
 	RotateInterval time.Duration
-	Compress       bool
 	FileMode       fs.FileMode
 }
 
@@ -42,11 +41,7 @@ func WithRotateInterval(interval time.Duration) Option {
 	return func(o *options) { o.RotateInterval = interval }
 }
 
-// WithCompression 设置是否异步 gzip 压缩历史日志。
-func WithCompression(enabled bool) Option { return func(o *options) { o.Compress = enabled } }
-
-// WithFileMode 设置创建日志文件和压缩文件时使用的权限。
-// 权限必须包含 owner 写位；启用压缩时还必须包含 owner 读位。
+// WithFileMode 设置创建日志文件时使用的权限。
 func WithFileMode(mode fs.FileMode) Option { return func(o *options) { o.FileMode = mode } }
 
 func resolveOptions(opts []Option) (options, error) {
@@ -77,9 +72,6 @@ func (o options) normalize() (options, error) {
 	}
 	if o.FileMode.Perm()&0o200 == 0 {
 		return o, fmt.Errorf("FileMode must include an owner write permission")
-	}
-	if o.Compress && o.FileMode.Perm()&0o400 == 0 {
-		return o, fmt.Errorf("FileMode must include an owner read permission when compression is enabled")
 	}
 	return o, nil
 }

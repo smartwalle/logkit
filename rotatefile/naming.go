@@ -24,43 +24,40 @@ func leftPadSequence(sequence uint64) string {
 
 // parseHistoricalName 仅识别当前 File 生成的历史文件，避免将具有相同前缀的
 // 无关文件纳入清理范围。
-func parseHistoricalName(current, path string) (timestamp time.Time, sequence uint64, compressed bool, ok bool) {
+func parseHistoricalName(current, path string) (timestamp time.Time, sequence uint64, ok bool) {
 	if filepath.Dir(current) != filepath.Dir(path) {
-		return time.Time{}, 0, false, false
+		return time.Time{}, 0, false
 	}
 	base := filepath.Base(current)
 	ext := filepath.Ext(base)
 	stem := strings.TrimSuffix(base, ext)
 	name := filepath.Base(path)
-	if strings.HasSuffix(name, ".gz") {
-		compressed = true
-		name = strings.TrimSuffix(name, ".gz")
-	}
+
 	if ext != "" {
 		if !strings.HasSuffix(name, ext) {
-			return time.Time{}, 0, false, false
+			return time.Time{}, 0, false
 		}
 		name = strings.TrimSuffix(name, ext)
 	}
 	prefix := stem + "."
 	if !strings.HasPrefix(name, prefix) {
-		return time.Time{}, 0, false, false
+		return time.Time{}, 0, false
 	}
 	rest := strings.TrimPrefix(name, prefix)
 	if len(rest) <= len(timestampLayout)+1 || rest[len(timestampLayout)] != '-' {
-		return time.Time{}, 0, false, false
+		return time.Time{}, 0, false
 	}
 	timestamp, err := time.ParseInLocation(timestampLayout, rest[:len(timestampLayout)], time.Local)
 	if err != nil {
-		return time.Time{}, 0, false, false
+		return time.Time{}, 0, false
 	}
 	sequenceText := rest[len(timestampLayout)+1:]
 	if len(sequenceText) < 4 {
-		return time.Time{}, 0, false, false
+		return time.Time{}, 0, false
 	}
 	sequence, err = strconv.ParseUint(sequenceText, 10, 64)
 	if err != nil {
-		return time.Time{}, 0, false, false
+		return time.Time{}, 0, false
 	}
-	return timestamp, sequence, compressed, true
+	return timestamp, sequence, true
 }
