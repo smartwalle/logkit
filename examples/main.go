@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/smartwalle/logkit"
 	"github.com/smartwalle/logkit/asyncwriter"
+	"github.com/smartwalle/logkit/bufferwriter"
 	"github.com/smartwalle/logkit/rotatefile"
 )
 
@@ -28,7 +28,7 @@ func main() {
 	}
 	defer file.Close()
 
-	buffer, err := logkit.NewBuffer(
+	bufWriter, err := bufferwriter.New(
 		file,
 		512,
 		time.Second,
@@ -37,12 +37,12 @@ func main() {
 		slog.Error("create buffered writer", "error", err)
 		os.Exit(1)
 	}
-	defer buffer.Close()
+	defer bufWriter.Close()
 
-	writer := asyncwriter.New(buffer, 10)
-	defer writer.Close()
+	asyncWriter := asyncwriter.New(bufWriter, 10)
+	defer asyncWriter.Close()
 
-	logger := slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
+	logger := slog.New(slog.NewJSONHandler(asyncWriter, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 
